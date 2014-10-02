@@ -22,13 +22,27 @@ and include the number of steps taken in 5 minute intervals each day.
 We begin by reading the data and appropriately transforming it into a suitable
 format for easy analysis.
 
+
 ```r
-# Data originated at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
+library(stringr) # for str_pad() function
+
+# Data originated at
+# https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
 filename <- unzip("activity.zip")
 
-activity <- read.csv(file=filename, header=TRUE, stringsAsFactors=FALSE)
-activity$date <- as.Date(activity$date, format="%Y-%m-%d")
+activity <- read.csv(file=filename, header=TRUE, stringsAsFactors=FALSE,
+                     colClasses=c("integer", "Date", "character"))
+
+activity$interval <- str_pad(activity$interval, width=4, pad="0")
+activity$hours <- as.integer(substr(activity$interval, 1, 2))
+activity$minutes <- as.integer(substr(activity$interval, 3, 4))
+activity$interval <- activity$hours*60 + activity$minutes 
 ```
+
+One rather unusual attribute of the interval variable is that it represents a
+24 hour clock time, despite being represented as an integer. Thus the number 
+`5` represents 12:05am, the number `300` represents 3:00am, etc. For this 
+reason we pad it out and convert it to minutes from midnight.
 
 ## What is mean total number of steps taken per day?
 It is interesting to evaluate the average number of steps the analyzed individual
@@ -36,12 +50,11 @@ took during the course of the day.
 
 ```r
 activity.perday <- aggregate(steps ~ date, data=activity, sum)
-
 mean.perday     <- mean(activity.perday$steps)
 median.perday   <- median(activity.perday$steps)
 ```
-We find that the mean number of steps taken per day is 1.0766 &times; 10<sup>4</sup> and the median is 
-10765. To summarize:
+We find that the mean number of steps taken per day is 1.0766 &times; 10<sup>4</sup> and 
+the median is 10765. To summarize:
 
 ```r
 summary(activity.perday$steps)
@@ -58,9 +71,9 @@ A simple histogram of steps per day is presented below.
 library(ggplot2)
 ggplot(activity.perday, aes(x=date, y=steps)) + 
    geom_bar(stat="identity") + 
-   labs(title="Average daily activity pattern", 
-        x="Day", y="Steps") + 
-   theme_light()
+   labs(title="Histogram of steps per day", 
+        x="Date", y="Steps") + 
+   theme_light() # new in ggplot2 1.0
 ```
 
 ![plot of chunk unnamed-chunk-4](./PA1_template_files/figure-html/unnamed-chunk-4.png) 
@@ -73,10 +86,9 @@ The chart below shows the activity pattern on a typical day, calculated based on
 activity.average <- aggregate(steps ~ interval, data=activity, mean)
 
 ggplot(activity.average, aes(x=interval, y=steps)) + 
-   geom_point(stat="identity") + 
+   geom_step(stat="identity") + 
    labs(title="Average daily activity pattern", 
-        x="Minutes interval", y="Steps") + 
-   geom_smooth(method=loess, span=0.3) +
+        x="Minutes since midnight", y="Steps") + 
    theme_light() # new in ggplot2 1.0
 ```
 
@@ -86,8 +98,9 @@ ggplot(activity.average, aes(x=interval, y=steps)) +
 ```r
 max.interval.index <- which(activity.average$steps == max(activity.average$steps))
 max.interval <- activity.average$interval[max.interval.index]
+max.interval.asTime <- format(as.POSIXct('1900-1-1') + max.interval * 60, '%I:%M%p')
 ```
-The interval with the maximum number of steps was 835 minutes from midnight.
+The interval with the maximum number of steps was the five minute period beginning at 08:35AM.
 
 ## Imputing missing values
 There are 2304 rows with missing values in the source data; however, we can impute them from the existing data. 
@@ -99,20 +112,23 @@ We choose for this example to use the mean from `activity.average` to fill in th
 missing.activity.index <- which(is.na(activity$steps))
 missing.activity.intervals <- activity$interval[missing.activity.index]
 
-activity$steps[missing.activity.index] <- 
-   activity.average$steps[activity.average$interval==missing.activity.intervals]
+for(idx in missing.activity.index)
+   {
+      ivl <- activity$interval[idx]
+      steps <- activity.average[activity.average$interval==ivl,]$steps
+      activity[idx,]$steps <- steps
+   }
 ```
 
-As a result of this, there are now 2016 rows with missing values. We can see how this affects the plot presented previously:
+As a result of this, there are now 0 rows with missing values. We can see how this affects the plot presented previously:
 
 ```r
-activity.average2 <- aggregate(steps ~ interval, data=activity, mean)
+activity.average.imputed <- aggregate(steps ~ interval, data=activity, mean)
 
-ggplot(activity.average2, aes(x=interval, y=steps)) + 
-   geom_point(stat="identity") + 
-   labs(title="Average daily activity pattern with missing values added", 
+ggplot(activity.average.imputed, aes(x=interval, y=steps)) + 
+   geom_step(stat="identity") + 
+   labs(title="Average daily activity pattern with missing values imputed from daily average", 
         x="Minutes interval", y="Steps") + 
-   geom_smooth(method=loess, span=0.2) +
    theme_light()
 ```
 
@@ -121,10 +137,10 @@ ggplot(activity.average2, aes(x=interval, y=steps)) +
 Recalculating the average day with these additional rows:
 
 ```r
-activity.perday2 <- aggregate(steps ~ date, data=activity, sum)
+activity.perday.imputed <- aggregate(steps ~ date, data=activity, sum)
 
-mean.perday2     <- mean(activity.perday2$steps)
-median.perday2   <- median(activity.perday2$steps)
+mean.perday.imputed     <- mean(activity.perday.imputed$steps)
+median.perday.imputed   <- median(activity.perday.imputed$steps)
 ```
 We find now that the mean number of steps taken per day is 1.0766 &times; 10<sup>4</sup> and the median is 
 1.0766 &times; 10<sup>4</sup>.
@@ -133,27 +149,20 @@ We find now that the mean number of steps taken per day is 1.0766 &times; 10<sup
 We are interested to compare differences in activity between weekdays and weekends. First we must fortify the data with an extra variable that indicates whether a given day is a weekday or not.
 
 ```r
-is.weekend <- weekdays(activity$date) %in% c("Saturday", "Sunday")
-activity <- cbind(activity, is.weekend)
+activity$isWeekend <- weekdays(activity$date) %in% c("Saturday", "Sunday")
 ```
 
 Now we can show the difference between weekdays and weekends in the following panel plot:
 
 ```r
-ggplot(activity, aes(x=interval, y=steps)) + 
-   geom_point(stat="identity") + 
+activity.average.weekday <- aggregate(steps ~ interval + isWeekend, data=activity, mean)
+ggplot(activity.average.weekday, aes(x=interval, y=steps)) + 
+   geom_point(stat="sum") + 
    labs(title="Average daily activity pattern, comparing weekdays and weekends", 
         x="Minutes interval", y="Steps") + 
-   facet_wrap(~ is.weekend, ncol=1) +
+   facet_wrap(~ isWeekend, ncol=2) +
    geom_smooth(method=loess, span=0.2) +
    theme_light()
-```
-
-```
-## Warning: Removed 1440 rows containing missing values (stat_smooth).
-## Warning: Removed 576 rows containing missing values (stat_smooth).
-## Warning: Removed 1440 rows containing missing values (geom_point).
-## Warning: Removed 576 rows containing missing values (geom_point).
 ```
 
 ![plot of chunk unnamed-chunk-11](./PA1_template_files/figure-html/unnamed-chunk-11.png) 
