@@ -19,7 +19,7 @@ processing and interpreting the data.
 
 ## Loading and preprocessing the data
 This assignment makes use of data from a personal activity monitoring
-device. This device collects data at 5 minute intervals through out the
+device that collects telemetry at five minute intervals throughout the
 day. The data consists of two months of data from an anonymous
 individual collected during the months of October and November, 2012
 and include the number of steps taken in 5 minute intervals each day.
@@ -40,11 +40,12 @@ activity <- read.csv(file=filename, header=TRUE, stringsAsFactors=FALSE,
 activity$interval <- str_pad(activity$interval, width=4, pad="0")
 activity$hours <- as.integer(substr(activity$interval, 1, 2))
 activity$minutes <- as.integer(substr(activity$interval, 3, 4))
-activity$interval <- activity$hours*60 + activity$minutes 
+activity$interval <- activity$hours*60 + activity$minutes
+activity$hours <- activity$minutes <- NULL
 ```
 
 One rather unusual attribute of the interval variable is that it represents a
-24 hour clock time, despite being represented as an integer. Thus the number 
+24 hour clock time, despite being presented as an integer. Thus the number 
 `5` represents 12:05am, the number `300` represents 3:00am, etc. For this 
 reason we pad it out and convert it to minutes from midnight.
 
@@ -75,7 +76,8 @@ ggplot(activity.perday, aes(x=date, y=steps)) +
 
 
 ## What is the average daily activity pattern?
-The chart below shows the activity pattern on a typical day, calculated based on taking the mean activity for each interval across all days measured:
+The chart below shows the activity pattern on a typical day, calculated based 
+on taking the mean activity for each interval across all days measured:
 ```{r}
 activity.average <- aggregate(steps ~ interval, data=activity, mean)
 
@@ -91,12 +93,15 @@ max.interval.index <- which(activity.average$steps == max(activity.average$steps
 max.interval <- activity.average$interval[max.interval.index]
 max.interval.asTime <- format(as.POSIXct('1900-1-1') + max.interval * 60, '%I:%M%p')
 ```
-The interval with the maximum number of steps was the five minute period beginning at `r max.interval.asTime`.
+The interval with the maximum number of steps was the five minute period 
+beginning at `r max.interval.asTime`.
 
 ## Imputing missing values
-There are `r sum(is.na(activity$steps))` rows with missing values in the source data; however, we can impute them from the existing data. 
+There are `r sum(is.na(activity$steps))` rows with missing values in the source
+data; however, we can impute them from the existing data. 
 
-We choose for this example to use the mean from `activity.average` to fill in the blank values. 
+We choose for this example to use the mean from `activity.average` to fill in 
+the blank values. 
 
 ```{r}
 missing.activity.index <- which(is.na(activity$steps))
@@ -110,7 +115,8 @@ for(idx in missing.activity.index)
    }
 ```
 
-As a result of this, there are now `r sum(is.na(activity$steps))` rows with missing values. We can see how this affects the plot presented previously:
+As a result of this, there are now `r sum(is.na(activity$steps))` rows with 
+missing values. We can see how this affects the plot presented previously:
 ```{r}
 activity.average.imputed <- aggregate(steps ~ interval, data=activity, mean)
 
@@ -129,16 +135,19 @@ mean.perday.imputed     <- mean(activity.perday.imputed$steps)
 median.perday.imputed   <- median(activity.perday.imputed$steps)
 
 ```
-We find now that the mean number of steps taken per day is `r mean.perday2` and the median is 
-`r median.perday2`.
+We find now that the mean number of steps taken per day is `r mean.perday2` 
+and the median is `r median.perday2`.
 
 ## Are there differences in activity patterns between weekdays and weekends?
-We are interested to compare differences in activity between weekdays and weekends. First we must fortify the data with an extra variable that indicates whether a given day is a weekday or not.
+We are interested to compare differences in activity between weekdays and 
+weekends. First we must fortify the data with an extra variable that indicates 
+whether a given day is a weekday or not.
 ```{r}
 activity$isWeekend <- weekdays(activity$date) %in% c("Saturday", "Sunday")
 ```
 
-Now we can show the difference between weekdays and weekends in the following panel plot:
+Now we can show the difference between weekdays and weekends in the following 
+panel plot:
 ```{r}
 activity.average.weekday <- aggregate(steps ~ interval + isWeekend, data=activity, mean)
 ggplot(activity.average.weekday, aes(x=interval, y=steps)) + 
